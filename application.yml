@@ -7,6 +7,7 @@ spring:
     password: Cnfc515053
     url: jdbc:mysql://localhost:3306/search_engine?useSSL=false&requireSSL=false&allowPublicKeyRetrieval=true
   jpa:
+    open-in-view: false
     properties:
       hibernate:
         dialect: org.hibernate.dialect.MySQL8Dialect
@@ -21,12 +22,12 @@ logging:
 
 search:
   user-agent: "HeliontSearchBot"
-  referrer: "http://www.google.com"
-  request-delay: 1000  # Время задержки между запросами в миллисекундах
+  referrer: "https://ya.ru/"
+  request-delay: 5000  # Время задержки между запросами в миллисекундах
 
 indexing-settings:
   sites:
-    - url: http://www.playback.ru/
-      name: PlayBack.Ru
-    - url: https://volochek.life/
-      name: Volochek.life
+    - url: "http://www.playback.ru/"
+      name: "PlayBack.Ru"
+    - url: "https://volochek.life/"
+      name: "Volochek.life"

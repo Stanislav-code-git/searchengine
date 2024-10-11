@@ -1,195 +1,168 @@
 package searchengine.services;
 
-import lombok.RequiredArgsConstructor;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.ResponseEntity;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import searchengine.config.Site;
 import searchengine.config.SitesList;
 import searchengine.model.Page;
-import searchengine.model.SiteStatus;
-import searchengine.repositories.PageRepository;
-import searchengine.repositories.SiteRepository;
+import searchengine.model.Site;
+import searchengine.model.Status;
+import searchengine.repository.PageRepository;
+import searchengine.repository.SiteRepository;
 
+import java.io.IOException;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.RecursiveTask;
-import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Service
-@RequiredArgsConstructor
 public class IndexingServiceImpl implements IndexingService {
 
-    private final SitesList sitesList;
     private final SiteRepository siteRepository;
     private final PageRepository pageRepository;
+    private final SitesList sitesList;
+    private final int numberOfThreads;
+    private ExecutorService executorService;
+    private List<Future<?>> indexingTasks; // Список задач индексации
+    private AtomicBoolean indexingActive;
 
-    @Value("${search.user-agent}")
-    private String userAgent;
+    @Autowired
+    public IndexingServiceImpl(SiteRepository siteRepository, PageRepository pageRepository, SitesList sitesList) {
+        this.siteRepository = siteRepository;
+        this.pageRepository = pageRepository;
+        this.sitesList = sitesList;
+        this.numberOfThreads = Runtime.getRuntime().availableProcessors();
+        this.indexingActive = new AtomicBoolean(false);
+        this.indexingTasks = new ArrayList<>();  // Инициализируем список задач
+    }
 
-    @Value("${search.referrer}")
-    private String referrer;
+    @Override
+    public boolean startIndexing() {
+        if (indexingActive.get()) {
+            return false;  // Если индексация уже активна, то не запускаем её снова
+        }
 
-    @Value("${search.request-delay}")
-    private long requestDelay;
+        clearData();
+        List<searchengine.config.Site> siteConfigs = sitesList.getSites();
 
-    private boolean indexing = false;
-    private ForkJoinPool forkJoinPool = new ForkJoinPool(); // Пул потоков для индексации
+        if (siteConfigs == null || siteConfigs.isEmpty()) {
+            throw new IllegalStateException("No sites configured for indexing.");
+        }
+
+        executorService = Executors.newFixedThreadPool(numberOfThreads);
+        indexingActive.set(true);  // Устанавливаем флаг активности индексации
+
+        for (searchengine.config.Site siteConfig : siteConfigs) {
+            Site site = new Site();
+            site.setStatus(Status.INDEXING);
+            site.setStatusTime(LocalDateTime.now());
+            site.setUrl(siteConfig.getUrl());
+            site.setName(siteConfig.getName());
+
+            Site savedSite = siteRepository.save(site);
+
+            Future<?> indexingTask = executorService.submit(() -> {
+                try {
+                    indexSitePages(savedSite);
+                    savedSite.setStatus(Status.INDEXED);
+                    savedSite.setStatusTime(LocalDateTime.now());
+                } catch (IOException e) {
+                    String errorMessage = "Failed to index site at " + savedSite.getUrl() + ": " + e.getMessage();
+                    savedSite.setStatus(Status.FAILED);
+                    savedSite.setLastError(errorMessage);
+                    e.printStackTrace();
+                } finally {
+                    siteRepository.save(savedSite);
+                }
+            });
+            indexingTasks.add(indexingTask);  // Добавляем задачу в список для отслеживания
+        }
+
+        executorService.shutdown();
+        return true;
+    }
+
+    @Override
+    public boolean stopIndexing() {
+        if (!indexingActive.get()) {
+            return false;  // Если индексация не была активной, возвращаем ошибку
+        }
+
+        // Останавливаем все активные задачи индексации
+        executorService.shutdownNow();  // Принудительная остановка потоков
+
+        // Обновляем статусы всех сайтов и страниц на FAILED
+        List<Site> sites = siteRepository.findAll();
+        for (Site site : sites) {
+            if (site.getStatus() == Status.INDEXING) {
+                site.setStatus(Status.FAILED);
+                site.setStatusTime(LocalDateTime.now());
+                site.setLastError("Индексация остановлена пользователем");
+                siteRepository.save(site);
+            }
+
+            List<Page> pages = pageRepository.findBySite(site);
+            for (Page page : pages) {
+                page.setCode(500);  // Устанавливаем код ошибки
+                page.setContent("Индексация остановлена пользователем");
+                pageRepository.save(page);
+            }
+        }
+
+        indexingActive.set(false);  // Сбрасываем флаг активности
+        return true;
+    }
+
+    private void indexSitePages(Site site) throws IOException {
+        Set<String> visitedLinks = new HashSet<>();
+        crawlPage(site, site.getUrl(), visitedLinks);
+    }
+
+    private void crawlPage(Site site, String url, Set<String> visitedLinks) throws IOException {
+        if (visitedLinks.contains(url)) {
+            return;
+        }
+
+        visitedLinks.add(url);
+        Document document = Jsoup.connect(url).get();
+        String content = document.body().text();
+        int statusCode = 200;
+
+        Page page = new Page();
+        page.setSite(site);
+        page.setPath(url);
+        page.setCode(statusCode);
+        page.setContent(content);
+
+        pageRepository.save(page);
+
+        Elements links = document.select("a[href]");
+        for (Element link : links) {
+            String absUrl = link.absUrl("href");
+
+            if (absUrl.startsWith(site.getUrl())) {
+                crawlPage(site, absUrl, visitedLinks);
+            }
+        }
+    }
 
     @Override
     public boolean isIndexing() {
-        return indexing;
+        return indexingActive.get();
     }
 
     @Override
-    @Transactional
-    public synchronized void startIndexing() {
-        if (indexing) {
-            return;
-        }
-        indexing = true;
-        try {
-            List<Site> sites = sitesList.getSites();
-            for (Site siteConfig : sites) {
-                searchengine.model.Site siteEntity = siteRepository.findByUrl(siteConfig.getUrl());
-                if (siteEntity != null) {
-                    pageRepository.deleteAllBySite(siteEntity);
-                    siteRepository.delete(siteEntity);
-                }
-
-                searchengine.model.Site newSite = new searchengine.model.Site();
-                newSite.setUrl(siteConfig.getUrl());
-                newSite.setName(siteConfig.getName());
-                newSite.setStatus(SiteStatus.INDEXING);
-                newSite.setStatusTime(LocalDateTime.now());
-                siteRepository.save(newSite);
-
-                try {
-                    processSitePages(newSite);
-                    newSite.setStatus(SiteStatus.INDEXED);
-                } catch (Exception e) {
-                    newSite.setStatus(SiteStatus.FAILED);
-                    newSite.setLastError("Ошибка индексации: " + e.getMessage());
-                } finally {
-                    newSite.setStatusTime(LocalDateTime.now());
-                    siteRepository.save(newSite);
-                }
-            }
-        } finally {
-            indexing = false;
-        }
-    }
-
-    // Метод для обработки страниц сайта
-    private void processSitePages(searchengine.model.Site site) throws Exception {
-        Set<String> visitedLinks = new HashSet<>();
-        forkJoinPool.invoke(new PageCrawler(site, "/", visitedLinks));
-    }
-
-    @Override
-    public synchronized ResponseEntity<?> stopIndexing() {
-        if (!indexing) {
-            return ResponseEntity.ok(Map.of("result", false, "error", "Индексация не запущена"));
-        }
-
-        // Остановка всех активных потоков
-        forkJoinPool.shutdownNow();
-        indexing = false;
-
-        // Обновление статуса сайтов в базе данных
-        List<searchengine.model.Site> indexingSites = siteRepository.findByStatus(SiteStatus.INDEXING);
-        for (searchengine.model.Site site : indexingSites) {
-            site.setStatus(SiteStatus.FAILED);
-            site.setLastError("Индексация остановлена пользователем");
-            site.setStatusTime(LocalDateTime.now());
-            siteRepository.save(site);
-        }
-
-        return ResponseEntity.ok(Map.of("result", true));
-    }
-
-    // Рекурсивная задача для обхода страниц
-    private class PageCrawler extends RecursiveTask<Void> {
-        private final searchengine.model.Site site;
-        private final String path;
-        private final Set<String> visitedLinks;
-
-        public PageCrawler(searchengine.model.Site site, String path, Set<String> visitedLinks) {
-            this.site = site;
-            this.path = path;
-            this.visitedLinks = visitedLinks;
-        }
-
-        @Override
-        protected Void compute() {
-            try {
-                if (Thread.currentThread().isInterrupted()) {
-                    throw new InterruptedException("Индексация остановлена пользователем");
-                }
-
-                String url = site.getUrl() + path;
-                if (visitedLinks.contains(url) || isPageExistsInDatabase(url)) {
-                    return null;
-                }
-
-                // Получение содержимого страницы с использованием User-Agent и referrer
-                Document doc = Jsoup.connect(url)
-                        .userAgent(userAgent)
-                        .referrer(referrer)
-                        .get();
-
-                visitedLinks.add(url);
-                savePage(url, doc);
-
-                Elements links = doc.select("a[href]");
-                for (Element link : links) {
-                    String nextPath = link.attr("href");
-                    if (nextPath.startsWith("/")) {
-                        nextPath = path + nextPath;
-                    }
-                    PageCrawler crawler = new PageCrawler(site, nextPath, visitedLinks);
-                    crawler.fork();
-
-                    // Задержка между запросами
-                    Thread.sleep(requestDelay);
-                }
-            } catch (InterruptedException e) {
-                site.setStatus(SiteStatus.FAILED);
-                site.setLastError("Индексация остановлена пользователем: " + e.getMessage());
-                site.setStatusTime(LocalDateTime.now());
-                siteRepository.save(site);
-            } catch (Exception e) {
-                site.setStatus(SiteStatus.FAILED);
-                site.setLastError("Ошибка обработки страницы: " + e.getMessage());
-                site.setStatusTime(LocalDateTime.now());
-                siteRepository.save(site);
-            }
-            return null;
-        }
-
-        // Метод для проверки существования страницы в базе данных
-        private boolean isPageExistsInDatabase(String url) {
-            return pageRepository.findByPath(url) != null;
-        }
-
-        // Метод для сохранения страницы в базе данных
-        private void savePage(String url, Document doc) {
-            Page page = new Page();
-            page.setSite(site);
-            page.setPath(url);
-            page.setCode(200);
-            page.setContent(doc.html());
-            pageRepository.save(page);
-            site.setStatusTime(LocalDateTime.now());
-            siteRepository.save(site);
-        }
+    public void clearData() {
+        pageRepository.deleteAll();
+        siteRepository.deleteAll();
     }
 }

@@ -1,16 +1,14 @@
 package searchengine.model;
 
-import lombok.Getter;
+import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 import javax.persistence.*;
 
 @Entity
-@Table(name = "page", indexes = @Index(columnList = "path"))
+@Table(name = "page", indexes = @Index(name = "path_idx", columnList = "path"))
 @NoArgsConstructor
-@Getter
-@Setter
+@Data
 public class Page {
 
     @Id
@@ -21,12 +19,12 @@ public class Page {
     @JoinColumn(name = "site_id", nullable = false)
     private Site site;
 
-    @Column(name = "path", columnDefinition = "VARCHAR(255)", nullable = false)
+    @Column(nullable = false, columnDefinition = "TEXT")
     private String path;
 
-    @Column(name = "code", nullable = false)
+    @Column(nullable = false)
     private int code;
 
-    @Column(name = "content", columnDefinition = "MEDIUMTEXT", nullable = false)
+    @Column(nullable = false, columnDefinition = "MEDIUMTEXT")
     private String content;
 }

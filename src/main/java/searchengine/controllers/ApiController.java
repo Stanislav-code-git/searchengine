@@ -8,7 +8,6 @@ import searchengine.dto.statistics.StatisticsResponse;
 import searchengine.services.IndexingService;
 import searchengine.services.StatisticsService;
 
-import java.util.HashMap;
 import java.util.Map;
 
 @RestController
@@ -31,15 +30,26 @@ public class ApiController {
     @GetMapping("/startIndexing")
     public ResponseEntity<Map<String, Object>> startIndexing() {
         if (indexingService.isIndexing()) {
-            Map<String, Object> response = new HashMap<>();
-            response.put("result", false);
-            response.put("error", "Индексация уже запущена");
-            return ResponseEntity.ok(response);
+            return ResponseEntity.badRequest()
+                    .body(Map.of("result", false, "error", "Индексация уже запущена"));
         }
+        boolean success = indexingService.startIndexing();
+        return success
+                ? ResponseEntity.ok(Map.of("result", true))
+                : ResponseEntity.status(500)
+                .body(Map.of("result", false, "error", "Ошибка при запуске индексации"));
+    }
 
-        indexingService.startIndexing();
-        Map<String, Object> response = new HashMap<>();
-        response.put("result", true);
-        return ResponseEntity.ok(response);
+    @GetMapping("/stopIndexing")
+    public ResponseEntity<Map<String, Object>> stopIndexing() {
+        if (!indexingService.isIndexing()) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("result", false, "error", "Индексация не запущена"));
+        }
+        boolean success = indexingService.stopIndexing();
+        return success
+                ? ResponseEntity.ok(Map.of("result", true))
+                : ResponseEntity.status(500)
+                .body(Map.of("result", false, "error", "Ошибка при остановке индексации"));
     }
 }
