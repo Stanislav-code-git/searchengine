@@ -5,4 +5,6 @@ public interface IndexingService {
     boolean startIndexing();
     boolean stopIndexing();
     void clearData();
+    boolean isValidUrl(String url);
+    boolean indexPage(String url);
 }

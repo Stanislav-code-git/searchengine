@@ -14,14 +14,14 @@ import searchengine.repository.PageRepository;
 import searchengine.repository.SiteRepository;
 
 import java.io.IOException;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 @Service
@@ -32,7 +32,7 @@ public class IndexingServiceImpl implements IndexingService {
     private final SitesList sitesList;
     private final int numberOfThreads;
     private ExecutorService executorService;
-    private List<Future<?>> indexingTasks; // Список задач индексации
+    private List<Future<?>> indexingTasks;
     private AtomicBoolean indexingActive;
 
     @Autowired
@@ -42,24 +42,31 @@ public class IndexingServiceImpl implements IndexingService {
         this.sitesList = sitesList;
         this.numberOfThreads = Runtime.getRuntime().availableProcessors();
         this.indexingActive = new AtomicBoolean(false);
-        this.indexingTasks = new ArrayList<>();  // Инициализируем список задач
+        this.indexingTasks = new ArrayList<>();
+    }
+
+    private boolean isIndexingActive() {
+        return indexingActive.get();
     }
 
     @Override
     public boolean startIndexing() {
-        if (indexingActive.get()) {
-            return false;  // Если индексация уже активна, то не запускаем её снова
+        if (isIndexingActive()) {
+            return false;
         }
 
         clearData();
+
+        if (executorService == null || executorService.isShutdown()) {
+            executorService = Executors.newFixedThreadPool(numberOfThreads);
+        }
+
+        indexingActive.set(true);
         List<searchengine.config.Site> siteConfigs = sitesList.getSites();
 
         if (siteConfigs == null || siteConfigs.isEmpty()) {
             throw new IllegalStateException("No sites configured for indexing.");
         }
-
-        executorService = Executors.newFixedThreadPool(numberOfThreads);
-        indexingActive.set(true);  // Устанавливаем флаг активности индексации
 
         for (searchengine.config.Site siteConfig : siteConfigs) {
             Site site = new Site();
@@ -79,28 +86,33 @@ public class IndexingServiceImpl implements IndexingService {
                     String errorMessage = "Failed to index site at " + savedSite.getUrl() + ": " + e.getMessage();
                     savedSite.setStatus(Status.FAILED);
                     savedSite.setLastError(errorMessage);
-                    e.printStackTrace();
                 } finally {
                     siteRepository.save(savedSite);
                 }
             });
-            indexingTasks.add(indexingTask);  // Добавляем задачу в список для отслеживания
+            indexingTasks.add(indexingTask);
         }
 
-        executorService.shutdown();
         return true;
     }
 
     @Override
     public boolean stopIndexing() {
-        if (!indexingActive.get()) {
-            return false;  // Если индексация не была активной, возвращаем ошибку
+        if (!isIndexingActive()) {
+            return false;
         }
 
-        // Останавливаем все активные задачи индексации
-        executorService.shutdownNow();  // Принудительная остановка потоков
+        executorService.shutdownNow();
 
-        // Обновляем статусы всех сайтов и страниц на FAILED
+        try {
+            if (!executorService.awaitTermination(60, TimeUnit.SECONDS)) {
+                executorService.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            executorService.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+
         List<Site> sites = siteRepository.findAll();
         for (Site site : sites) {
             if (site.getStatus() == Status.INDEXING) {
@@ -112,13 +124,13 @@ public class IndexingServiceImpl implements IndexingService {
 
             List<Page> pages = pageRepository.findBySite(site);
             for (Page page : pages) {
-                page.setCode(500);  // Устанавливаем код ошибки
+                page.setCode(500);
                 page.setContent("Индексация остановлена пользователем");
                 pageRepository.save(page);
             }
         }
 
-        indexingActive.set(false);  // Сбрасываем флаг активности
+        indexingActive.set(false);
         return true;
     }
 
@@ -127,8 +139,17 @@ public class IndexingServiceImpl implements IndexingService {
         crawlPage(site, site.getUrl(), visitedLinks);
     }
 
+    private Page savePage(Site site, String url, int statusCode, String content) {
+        Page page = new Page();
+        page.setSite(site);
+        page.setPath(url);
+        page.setCode(statusCode);
+        page.setContent(content);
+        return pageRepository.save(page);
+    }
+
     private void crawlPage(Site site, String url, Set<String> visitedLinks) throws IOException {
-        if (visitedLinks.contains(url)) {
+        if (visitedLinks.contains(url) || pageRepository.existsByPath(url)) {
             return;
         }
 
@@ -137,19 +158,13 @@ public class IndexingServiceImpl implements IndexingService {
         String content = document.body().text();
         int statusCode = 200;
 
-        Page page = new Page();
-        page.setSite(site);
-        page.setPath(url);
-        page.setCode(statusCode);
-        page.setContent(content);
-
-        pageRepository.save(page);
+        savePage(site, url, statusCode, content);
 
         Elements links = document.select("a[href]");
         for (Element link : links) {
             String absUrl = link.absUrl("href");
 
-            if (absUrl.startsWith(site.getUrl())) {
+            if (absUrl.startsWith(site.getUrl()) && !visitedLinks.contains(absUrl)) {
                 crawlPage(site, absUrl, visitedLinks);
             }
         }
@@ -157,12 +172,26 @@ public class IndexingServiceImpl implements IndexingService {
 
     @Override
     public boolean isIndexing() {
-        return indexingActive.get();
+        return isIndexingActive();
     }
 
     @Override
     public void clearData() {
         pageRepository.deleteAll();
         siteRepository.deleteAll();
+    }
+    @Override
+    public boolean indexPage(String url) {
+        return true;
+    }
+    @Override
+    public boolean isValidUrl(String url) {
+        try {
+            new URL(url);
+            return true;
+        } catch (MalformedURLException e) {
+            System.out.println("Некорректный URL: " + url);
+            return false;
+        }
     }
 }

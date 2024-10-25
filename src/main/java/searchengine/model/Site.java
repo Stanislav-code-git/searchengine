@@ -1,11 +1,12 @@
 package searchengine.model;
 
+import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import javax.persistence.*;
+
 import java.time.LocalDateTime;
-import java.util.List;
+import java.util.Set;
 
 @Entity
 @Table(name = "site")
@@ -17,8 +18,9 @@ public class Site {
         @GeneratedValue(strategy = GenerationType.IDENTITY)
         private int id;
 
+        // Исправление: Использование @Enumerated для корректной работы с Enum
         @Enumerated(EnumType.STRING)
-        @Column(nullable = false, columnDefinition = "ENUM('INDEXING', 'INDEXED', 'FAILED')")
+        @Column(nullable = false)
         private Status status;
 
         @Column(name = "status_time", nullable = false)
@@ -34,5 +36,5 @@ public class Site {
         private String name;
 
         @OneToMany(mappedBy = "site", cascade = CascadeType.ALL)
-        private List<Page> pages;
+        private Set<Page> pages;
 }
