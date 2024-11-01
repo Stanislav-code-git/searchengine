@@ -1,11 +1,13 @@
 package searchengine.model;
 
 import jakarta.persistence.*;
-import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
 
 @Entity
 @Table(name = "lemma_index")
-@Data
+@Getter
+@Setter
 public class Index {
 
     @Id

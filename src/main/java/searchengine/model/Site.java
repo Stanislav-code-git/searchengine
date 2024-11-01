@@ -2,7 +2,9 @@ package searchengine.model;
 
 import jakarta.persistence.*;
 import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 
 import java.time.LocalDateTime;
@@ -11,14 +13,14 @@ import java.util.Set;
 @Entity
 @Table(name = "site")
 @NoArgsConstructor
-@Data
+@Getter
+@Setter
 public class Site {
 
         @Id
         @GeneratedValue(strategy = GenerationType.IDENTITY)
         private int id;
 
-        // Исправление: Использование @Enumerated для корректной работы с Enum
         @Enumerated(EnumType.STRING)
         @Column(nullable = false)
         private Status status;

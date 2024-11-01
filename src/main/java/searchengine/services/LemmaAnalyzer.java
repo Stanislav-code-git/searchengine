@@ -11,7 +11,7 @@ import java.util.Map;
 @Service
 public class LemmaAnalyzer {
 
-    private final LuceneMorphology luceneMorphology;
+    private LuceneMorphology luceneMorphology;
 
     public LemmaAnalyzer() throws Exception {
         luceneMorphology = new RussianLuceneMorphology();
@@ -20,7 +20,7 @@ public class LemmaAnalyzer {
     public Map<String, Integer> analyzeText(String text) {
         Map<String, Integer> lemmaCounts = new HashMap<>();
 
-        String[] words = text.toLowerCase().split("[^а-яёА-ЯЁ]+"); // Теперь учитываются все русские буквы
+        String[] words = text.toLowerCase().split("[^а-яёА-ЯЁ]+");
 
         for (String word : words) {
             if (word.isEmpty()) continue;

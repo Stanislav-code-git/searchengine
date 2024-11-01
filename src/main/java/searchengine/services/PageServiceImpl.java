@@ -1,8 +1,10 @@
 package searchengine.services;
 
+import jakarta.transaction.Transactional;
+import lombok.RequiredArgsConstructor;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
-import org.springframework.stereotype.Service;  // Добавьте импорт
+import org.springframework.stereotype.Service;
 import searchengine.model.Page;
 import searchengine.model.Site;
 import searchengine.repository.PageRepository;
@@ -10,14 +12,12 @@ import searchengine.repository.PageRepository;
 import java.io.IOException;
 
 @Service
+@RequiredArgsConstructor
 public class PageServiceImpl implements PageService {
 
     private final PageRepository pageRepository;
 
-    public PageServiceImpl(PageRepository pageRepository) {
-        this.pageRepository = pageRepository;
-    }
-
+    @Transactional
     public Page savePageContent(Site site, String url) throws IOException {
         Document doc;
         try {

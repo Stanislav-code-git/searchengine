@@ -4,11 +4,10 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import searchengine.config.Site;
 import searchengine.config.SitesList;
 import searchengine.model.Page;
-import searchengine.model.Site;
 import searchengine.model.Status;
 import searchengine.repository.PageRepository;
 import searchengine.repository.SiteRepository;
@@ -27,15 +26,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @Service
 public class IndexingServiceImpl implements IndexingService {
 
-    private final SiteRepository siteRepository;
-    private final PageRepository pageRepository;
-    private final SitesList sitesList;
-    private final int numberOfThreads;
+    private SiteRepository siteRepository;
+    private PageRepository pageRepository;
+    private SitesList sitesList;
+    private int numberOfThreads;
     private ExecutorService executorService;
     private List<Future<?>> indexingTasks;
     private AtomicBoolean indexingActive;
 
-    @Autowired
     public IndexingServiceImpl(SiteRepository siteRepository, PageRepository pageRepository, SitesList sitesList) {
         this.siteRepository = siteRepository;
         this.pageRepository = pageRepository;
@@ -62,20 +60,20 @@ public class IndexingServiceImpl implements IndexingService {
         }
 
         indexingActive.set(true);
-        List<searchengine.config.Site> siteConfigs = sitesList.getSites();
+        List<Site> siteConfigs = sitesList.getSites();
 
         if (siteConfigs == null || siteConfigs.isEmpty()) {
             throw new IllegalStateException("No sites configured for indexing.");
         }
 
-        for (searchengine.config.Site siteConfig : siteConfigs) {
-            Site site = new Site();
+        for (Site siteConfig : siteConfigs) {
+            searchengine.model.Site site = new searchengine.model.Site();
             site.setStatus(Status.INDEXING);
             site.setStatusTime(LocalDateTime.now());
             site.setUrl(siteConfig.getUrl());
             site.setName(siteConfig.getName());
 
-            Site savedSite = siteRepository.save(site);
+            searchengine.model.Site savedSite = siteRepository.save(site);
 
             Future<?> indexingTask = executorService.submit(() -> {
                 try {
@@ -113,8 +111,8 @@ public class IndexingServiceImpl implements IndexingService {
             Thread.currentThread().interrupt();
         }
 
-        List<Site> sites = siteRepository.findAll();
-        for (Site site : sites) {
+        List<searchengine.model.Site> sites = siteRepository.findAll();
+        for (searchengine.model.Site site : sites) {
             if (site.getStatus() == Status.INDEXING) {
                 site.setStatus(Status.FAILED);
                 site.setStatusTime(LocalDateTime.now());
@@ -134,12 +132,12 @@ public class IndexingServiceImpl implements IndexingService {
         return true;
     }
 
-    private void indexSitePages(Site site) throws IOException {
+    private void indexSitePages(searchengine.model.Site site) throws IOException {
         Set<String> visitedLinks = new HashSet<>();
         crawlPage(site, site.getUrl(), visitedLinks);
     }
 
-    private Page savePage(Site site, String url, int statusCode, String content) {
+    private Page savePage(searchengine.model.Site site, String url, int statusCode, String content) {
         Page page = new Page();
         page.setSite(site);
         page.setPath(url);
@@ -148,7 +146,7 @@ public class IndexingServiceImpl implements IndexingService {
         return pageRepository.save(page);
     }
 
-    private void crawlPage(Site site, String url, Set<String> visitedLinks) throws IOException {
+    private void crawlPage(searchengine.model.Site site, String url, Set<String> visitedLinks) throws IOException {
         if (visitedLinks.contains(url) || pageRepository.existsByPath(url)) {
             return;
         }

@@ -1,5 +1,6 @@
 package searchengine.controllers;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -13,29 +14,20 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api")
+@RequiredArgsConstructor
 public class ApiController {
 
     private final StatisticsService statisticsService;
     private final IndexingService indexingService;
     private final SearchService searchService;
 
-    public ApiController(StatisticsService statisticsService, IndexingService indexingService, SearchService searchService) {
-        this.statisticsService = statisticsService;
-        this.indexingService = indexingService;
-        this.searchService = searchService;
-    }
-
     private ResponseEntity<Map<String, Object>> createErrorResponse(String errorMessage, HttpStatus status) {
         return ResponseEntity.status(status).body(Map.of("result", false, "error", errorMessage));
     }
 
     @GetMapping("/statistics")
-    public ResponseEntity<Map<String, Object>> statistics() {
-        try {
-            return ResponseEntity.ok(Map.of("result", true, "data", statisticsService.getStatistics()));
-        } catch (Exception e) {
-            return createErrorResponse("Ошибка при получении статистики", HttpStatus.INTERNAL_SERVER_ERROR);
-        }
+    public ResponseEntity<StatisticsResponse> statistics() {
+        return ResponseEntity.ok(statisticsService.getStatistics());
     }
 
     @GetMapping("/startIndexing")

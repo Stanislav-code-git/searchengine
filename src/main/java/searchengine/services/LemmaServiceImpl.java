@@ -1,5 +1,6 @@
 package searchengine.services;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import searchengine.model.Lemma;
@@ -12,15 +13,11 @@ import java.util.Map;
 import java.util.Optional;
 
 @Service
+@RequiredArgsConstructor
 public class LemmaServiceImpl implements LemmaService {
 
     private final LemmaRepository lemmaRepository;
     private final IndexRepository indexRepository;
-
-    public LemmaServiceImpl(LemmaRepository lemmaRepository, IndexRepository indexRepository) {
-        this.lemmaRepository = lemmaRepository;
-        this.indexRepository = indexRepository;
-    }
 
     private Lemma saveOrUpdateLemma(String lemmaText, int siteId, int count) {
         Optional<Lemma> optionalLemma = lemmaRepository.findByLemmaAndSiteId(lemmaText, (long) siteId);
@@ -30,12 +27,11 @@ public class LemmaServiceImpl implements LemmaService {
             lemma.setLemma(lemmaText);
             lemma.setSiteId(siteId);
             lemma.setFrequency(count);
-            return lemmaRepository.save(lemma);
         } else {
             lemma = optionalLemma.get();
             lemma.setFrequency(lemma.getFrequency() + count);
-            return lemmaRepository.save(lemma);
         }
+        return lemmaRepository.save(lemma);
     }
 
     @Transactional

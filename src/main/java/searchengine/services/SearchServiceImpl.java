@@ -1,5 +1,8 @@
 package searchengine.services;
 
+import lombok.RequiredArgsConstructor;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
 import org.springframework.stereotype.Service;
 import searchengine.model.Lemma;
 import searchengine.model.Page;
@@ -11,19 +14,12 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
+@RequiredArgsConstructor
 public class SearchServiceImpl implements SearchService {
     private final LemmaAnalyzer lemmaAnalyzer;
     private final LemmaRepository lemmaRepository;
     private final PageRepository pageRepository;
     private final IndexRepository indexRepository;
-
-    public SearchServiceImpl(LemmaAnalyzer lemmaAnalyzer, LemmaRepository lemmaRepository,
-                             PageRepository pageRepository, IndexRepository indexRepository) {
-        this.lemmaAnalyzer = lemmaAnalyzer;
-        this.lemmaRepository = lemmaRepository;
-        this.pageRepository = pageRepository;
-        this.indexRepository = indexRepository;
-    }
 
     @Override
     public SearchResults search(String query, String site, int offset, int limit) {
@@ -89,12 +85,15 @@ public class SearchServiceImpl implements SearchService {
     }
 
     private String getPageTitle(String content) {
-        return "";
-        // Логика для получения заголовка из HTML-контента страницы
+        Document doc = Jsoup.parse(content);
+        return doc.title();
     }
 
     private String createSnippet(String content, List<Lemma> lemmas) {
-        return "";
-        // Логика для создания сниппета с выделением совпадений жирным
+        String snippet = Jsoup.parse(content).text(); // удаление HTML
+        for (Lemma lemma : lemmas) {
+            snippet = snippet.replaceAll("(?i)" + lemma.getLemma(), "<b>" + lemma.getLemma() + "</b>");
+        }
+        return snippet.length() > 200 ? snippet.substring(0, 200) + "..." : snippet;
     }
 }

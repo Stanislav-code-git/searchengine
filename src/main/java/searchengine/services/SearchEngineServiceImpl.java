@@ -1,5 +1,7 @@
 package searchengine.services;
 
+import jakarta.transaction.Transactional;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import searchengine.model.Page;
 import searchengine.model.Site;
@@ -8,19 +10,15 @@ import java.io.IOException;
 import java.util.Map;
 
 @Service
+@RequiredArgsConstructor
 public class SearchEngineServiceImpl implements SearchEngineService {
 
     private final PageService pageService;
     private final LemmaAnalyzer lemmaAnalyzer;
     private final LemmaService lemmaService;
 
-    public SearchEngineServiceImpl(PageService pageService, LemmaAnalyzer lemmaAnalyzer, LemmaService lemmaService) {
-        this.pageService = pageService;
-        this.lemmaAnalyzer = lemmaAnalyzer;
-        this.lemmaService = lemmaService;
-    }
-
     @Override
+    @Transactional
     public void processUrl(Site site, String url) {
         Page page;
         try {

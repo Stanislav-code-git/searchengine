@@ -2,12 +2,13 @@ package searchengine.model;
 
 import jakarta.persistence.*;
 import jakarta.persistence.Index;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.Getter;
+import lombok.Setter;
 
 @Entity
 @Table(name = "page", indexes = { @Index(name = "path_idx", columnList = "path") })
-@Data
+@Getter
+@Setter
 public class Page {
 
     @Id
