@@ -4,18 +4,16 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
-import searchengine.model.Lemma;
 import searchengine.model.Page;
-import searchengine.model.Site;
-
-import java.util.List;
 
 @Repository
-public interface PageRepository extends JpaRepository<Page, Long> {
-    boolean existsByPath(String path);
+public interface PageRepository extends JpaRepository<Page, Integer> {
+    @Query(value = "select * from page t where t.site_id = :siteId and t.path = :path limit 1", nativeQuery = true)
+    Page findPageBySiteIdAndPath(@Param("path") String path, @Param("siteId") Integer siteId);
 
-    List<Page> findBySite(Site site);
+    @Query(value = "select count(p) from Page p where p.siteId = :siteId")
+    Integer findCountRecordBySiteId(@Param("siteId") Integer siteId);
 
-    @Query("SELECT p FROM Page p JOIN Index i ON i.page = p WHERE i.lemma = :lemma AND (:site IS NULL OR p.site.url = :site)")
-    List<Page> findPagesByLemma(@Param("lemma") Lemma lemma, @Param("site") String site);
+    @Query(value = "select count(p) from Page p where (:siteId is null or siteId = :siteId)")
+    Integer getCountPages(@Param("siteId")Integer siteId);
 }

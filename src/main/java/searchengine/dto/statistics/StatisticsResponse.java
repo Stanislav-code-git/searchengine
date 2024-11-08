@@ -1,10 +1,8 @@
 package searchengine.dto.statistics;
 
-import lombok.Getter;
-import lombok.Setter;
+import lombok.Data;
 
-@Getter
-@Setter
+@Data
 public class StatisticsResponse {
     private boolean result;
     private StatisticsData statistics;

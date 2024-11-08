@@ -1,9 +1,10 @@
+
 package searchengine.services;
 
-import searchengine.model.Page;
-
+import java.io.IOException;
 import java.util.Map;
 
 public interface LemmaService {
-    void processLemmas(Page page, Map<String, Integer> lemmas);
+    Map<String, Integer> getLemmasFromText(String text) throws IOException;
+    String getLemmaByWord(String word);
 }

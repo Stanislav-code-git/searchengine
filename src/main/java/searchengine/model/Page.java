@@ -1,30 +1,35 @@
 package searchengine.model;
 
 import jakarta.persistence.*;
-import jakarta.persistence.Index;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Entity
-@Table(name = "page", indexes = { @Index(name = "path_idx", columnList = "path") })
-@Getter
+@Table(name = "page", indexes = {@Index(name = "path_index", columnList = "path")})
+@NoArgsConstructor
 @Setter
+@Getter
 public class Page {
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private int id;
-
-    @ManyToOne
-    @JoinColumn(name = "site_id", nullable = false)
-    private Site site;
-
-    @Column(name = "path", nullable = false, length = 255)
+    @Column(name = "site_id")
+    private int siteId;
     private String path;
-
-    @Column(nullable = false)
     private int code;
-
-    @Column(nullable = false, columnDefinition = "MEDIUMTEXT")
+    @Column(columnDefinition = "MEDIUMTEXT")
     private String content;
+    @ManyToOne()
+    @JoinColumn(name = "site_id", nullable = false, insertable = false, updatable = false)
+    private SitePage sitePage;
+
+    public Page(Page page) {
+        this.id = page.getId();
+        this.siteId = page.getSiteId();
+        this.path = page.getPath();
+        this.code = page.getCode();
+        this.content = page.getContent();
+        this.sitePage = page.getSitePage();
+    }
 }
