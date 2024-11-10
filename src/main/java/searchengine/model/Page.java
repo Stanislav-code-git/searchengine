@@ -14,22 +14,13 @@ public class Page {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private int id;
-    @Column(name = "site_id")
+    @Column(name = "site_id", columnDefinition = "INTEGER")
     private int siteId;
     private String path;
     private int code;
     @Column(columnDefinition = "MEDIUMTEXT")
     private String content;
-    @ManyToOne()
+    @ManyToOne
     @JoinColumn(name = "site_id", nullable = false, insertable = false, updatable = false)
     private SitePage sitePage;
-
-    public Page(Page page) {
-        this.id = page.getId();
-        this.siteId = page.getSiteId();
-        this.path = page.getPath();
-        this.code = page.getCode();
-        this.content = page.getContent();
-        this.sitePage = page.getSitePage();
-    }
 }

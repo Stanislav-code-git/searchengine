@@ -16,6 +16,7 @@ import java.util.List;
 public class SitePage {
         @Id
         @GeneratedValue(strategy = GenerationType.IDENTITY)
+        @Column(columnDefinition = "INTEGER")
         private int id;
         @Enumerated(EnumType.STRING)
         private Status status;
@@ -27,8 +28,7 @@ public class SitePage {
         private String url;
         @Column(columnDefinition = "VARCHAR(255)")
         private String name;
-        @OneToMany(orphanRemoval = true)
-        @JoinColumn(name = "site_id")
+        @OneToMany(mappedBy = "sitePage", orphanRemoval = true)
         private List<Page> pages;
         @OneToMany(orphanRemoval = true)
         @JoinColumn(name = "site_id")
